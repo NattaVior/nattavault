@@ -1,74 +1,52 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import crypto from 'node:crypto';
 import { requireUser } from '@/lib/auth';
-import { normalizeTagName } from '@/lib/security';
+import { db } from '@/lib/db';
+import { extension, safeName, validateMagicBytes, validateUpload } from '@/lib/security';
+import { storage } from '@/lib/storage';
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  try {
-    await requireUser();
-    const file = await db.file.findUnique({
-      where: { id: params.id },
-      include: { tags: { include: { tag: true } }, folder: true },
-    });
-
-    if (!file) return NextResponse.json({ error: 'File not found' }, { status: 404 });
-    return NextResponse.json({ ...file, size: file.size.toString() });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-}
-
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request) {
   try {
     const userId = await requireUser();
-    const body = await req.json();
-    const file = await db.file.findUnique({ where: { id: params.id } });
-    if (!file) return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    const formData = await req.formData();
+    const file = formData.get('file');
 
-    const folderId = body.folderId === '' ? null : body.folderId || file.folderId;
-    if (body.folderId && body.folderId !== '') {
-      const folderExists = await db.folder.findUnique({ where: { id: body.folderId } });
-      if (!folderExists) return NextResponse.json({ error: 'Folder not found' }, { status: 400 });
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: 'No file provided.' }, { status: 400 });
     }
 
-    const updatePayload: any = {
-      title: body.title !== undefined ? (body.title ? String(body.title) : null) : undefined,
-      description: body.description !== undefined ? (body.description ? String(body.description) : null) : undefined,
-      folderId,
-      visibility: body.visibility || undefined,
-      allowDownload: body.allowDownload !== undefined ? Boolean(body.allowDownload) : undefined,
-      featured: body.featured !== undefined ? Boolean(body.featured) : undefined,
-    };
+    const maxUploadBytes = Number(process.env.MAX_UPLOAD_BYTES || 524288000);
+    const info = validateUpload(file, maxUploadBytes);
+    const buffer = Buffer.from(await file.arrayBuffer());
+    validateMagicBytes(buffer, file.type || info.mime || 'application/octet-stream');
 
-    const updated = await db.$transaction(async (tx) => {
-      if (Array.isArray(body.tagNames)) {
-        await tx.fileTag.deleteMany({ where: { fileId: file.id } });
-        for (const rawName of body.tagNames) {
-          const name = normalizeTagName(String(rawName));
-          if (!name) continue;
-          const tag = await tx.tag.upsert({ where: { name }, update: {}, create: { name } });
-          await tx.fileTag.create({ data: { fileId: file.id, tagId: tag.id } });
-        }
-      }
+    const storageKey = `uploads/${crypto.randomUUID()}-${info.safeName}`;
+    await storage.upload(storageKey, buffer, file.type || 'application/octet-stream');
 
-      const next = await tx.file.update({ where: { id: file.id }, data: updatePayload });
-      await tx.auditLog.create({ data: { action: 'metadata_change', entityId: file.id, userId, details: 'file metadata updated' } });
-      return next;
-    });
-
-    return NextResponse.json({ ok: true, file: updated });
+    try {
+      const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
+      const record = await db.file.create({
+        data: {
+          originalName: file.name,
+          storedName: info.safeName,
+          storageKey,
+          mimeType: file.type || 'application/octet-stream',
+          extension: extension(file.name),
+          size: BigInt(file.size),
+          checksum,
+          visibility: 'PRIVATE',
+          title: file.name,
+        },
+      });
+      await db.auditLog.create({ data: { action: 'upload', entityId: record.id, userId } });
+      return NextResponse.json({ ok: true, id: record.id, name: record.originalName });
+    } catch (databaseError) {
+      await storage.delete(storageKey).catch(() => undefined);
+      throw databaseError;
+    }
   } catch (error) {
-    return NextResponse.json({ error: 'Unable to update file metadata.' }, { status: 400 });
-  }
-}
-
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  try {
-    const userId = await requireUser();
-    const file = await db.file.update({ where: { id: params.id }, data: { deletedAt: new Date() } });
-    await db.auditLog.create({ data: { action: 'delete', entityId: file.id, userId } });
-    return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: 'Unable to delete file.' }, { status: 400 });
+    console.error('Upload failed:', error);
+    const message = error instanceof Error ? error.message : 'Something went wrong while uploading this file.';
+    return NextResponse.json({ error: message }, { status: message.includes('large') ? 413 : 400 });
   }
 }
