@@ -8,4 +8,4 @@ Uploads are size-limited, extension/MIME allowlisted, sanitized, UUID-keyed, che
 
 Normal deletion is soft deletion. Admin-only permanent deletion removes the storage object first and then the database row; if storage deletion fails, the database row is retained. Orphan discovery/cleanup is admin-only.
 
-Runtime npm, Prisma, TypeScript, ESLint, build, PostgreSQL, and S3 validation are pending and must be performed before production deployment.
+Runtime validation is still pending and must be completed before production deployment.

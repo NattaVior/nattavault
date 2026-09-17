@@ -5,33 +5,47 @@ NattaVault is a personal digital archive with a curated public portfolio and a p
 ## First-time setup (development)
 
 1. Install Node.js 20 LTS or newer.
-2. Install dependencies: `npm install`.
-3. Copy `.env.example` to `.env` and replace the development placeholders.
-4. Install and configure PostgreSQL, then set `DATABASE_URL` to the database connection string.
-5. Generate Prisma Client and apply the development schema: `npm run db:generate` followed by `npm run db:push`.
-6. Seed the development admin and baseline records: `npm run db:seed`.
-7. Configure an S3-compatible private bucket and its credentials in `.env`.
+2. Install dependencies with `npm install`.
+3. Copy `.env.example` to `.env` and replace the placeholder values with real values.
+4. Provision PostgreSQL and assign a working connection string to `DATABASE_URL`.
+5. Generate Prisma Client and apply the schema: `npm run db:generate` and `npm run db:push`.
+6. Seed the initial admin user and required base records: `npm run db:seed`.
+7. Configure a private S3-compatible storage bucket and populate the storage variables in `.env`.
 8. Start the development server: `npm run dev`.
-9. When preparing a deployment, create the production bundle with `npm run build`, then run it with `npm start`.
+9. For a production bundle: `npm run build`, then run the app with `npm start`.
 
-The seed command requires `ADMIN_EMAIL` and `ADMIN_PASSWORD`; it does not provide insecure fallback credentials. Never use development credentials in production.
+Development and production are intentionally separate. Use a unique `AUTH_SECRET`, a real `PUBLIC_SITE_URL`, and real admin credentials in production; never reuse local defaults.
 
-## Environment variables
+## Required environment variables
 
-Required variables are documented in `.env.example`: `DATABASE_URL`, `AUTH_SECRET`, `STORAGE_ENDPOINT` (optional for AWS S3, required for non-AWS endpoints), `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, `PUBLIC_SITE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `MAX_UPLOAD_BYTES`. None use `NEXT_PUBLIC_`, so server secrets are not bundled for the client.
+The repository documents the required variables in `.env.example`:
 
-## Production deployment checklist
+- `DATABASE_URL`
+- `AUTH_SECRET`
+- `STORAGE_ENDPOINT` (optional for direct AWS S3; required for many S3-compatible endpoints)
+- `STORAGE_REGION`
+- `STORAGE_BUCKET`
+- `STORAGE_ACCESS_KEY`
+- `STORAGE_SECRET_KEY`
+- `PUBLIC_SITE_URL`
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+- `MAX_UPLOAD_BYTES`
 
-- [ ] PostgreSQL is provisioned, reachable, backed up, and migrations/schema changes are managed deliberately.
-- [ ] S3-compatible storage is configured with a private bucket and least-privilege credentials.
-- [ ] A long random `AUTH_SECRET` is configured through the secret manager.
-- [ ] Unique administrator credentials are configured; development defaults are not used.
-- [ ] `PUBLIC_SITE_URL` is the canonical HTTPS origin.
-- [ ] HTTPS is enforced at the proxy/load balancer.
-- [ ] Rate limiting uses shared Redis/KV or equivalent storage for multi-instance deployments.
-- [ ] Malware scanning is added if required by the deployment threat model; it is not built in.
-- [ ] Database, storage, application logs, error monitoring, and alerting are configured.
+No `NEXT_PUBLIC_` secrets are used, so credentials are not exposed to the browser.
+
+## Production checklist
+
+- [ ] PostgreSQL is provisioned and backed up.
+- [ ] An S3-compatible private bucket is configured with least-privilege credentials.
+- [ ] `AUTH_SECRET` is set to a long random value managed by a secret store.
+- [ ] `ADMIN_EMAIL` and `ADMIN_PASSWORD` are unique and not left at development defaults.
+- [ ] `PUBLIC_SITE_URL` is the correct HTTPS site origin.
+- [ ] HTTPS is enforced at the edge or reverse proxy.
+- [ ] The application is behind monitoring and alerting.
+- [ ] Shared rate limiting is configured for multi-instance deployments.
+- [ ] Malware scanning is added if required by the operational risk model.
 
 ## Runtime status
 
-Runtime validation is pending. This repository audit did not run npm, Prisma, TypeScript, ESLint, or the production build.
+Runtime validation is still pending. This repository audit did not run `npm`, Prisma commands, TypeScript, ESLint, or a production build because the execution environment is unavailable.
