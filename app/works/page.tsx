@@ -1,2 +1,85 @@
-import Link from 'next/link'; import { db } from '@/lib/db';
-export default async function Works({searchParams}:{searchParams:{q?:string}}){const q=searchParams.q?.trim();const files=await db.file.findMany({where:{visibility:'PUBLIC',deletedAt:null,...(q?{OR:[{title:{contains:q,mode:'insensitive'}},{originalName:{contains:q,mode:'insensitive'}},{description:{contains:q,mode:'insensitive'}},{tags:{some:{tag:{name:{contains:q,mode:'insensitive'}}}}}]}:{})},orderBy:{publishedAt:'desc'},take:60});return <main className="shell" style={{paddingTop:30,paddingBottom:80}}><Link className="muted" href="/">← NattaVault</Link><div style={{display:'flex',justifyContent:'space-between',alignItems:'end',margin:'80px 0 28px',gap:20,flexWrap:'wrap'}}><div><p className="accent">THE ARCHIVE</p><h1>Works</h1></div><form><input name="q" defaultValue={q} placeholder="Search the archive…" style={{background:'#17131f',border:'1px solid #3c3548',padding:13,borderRadius:999,color:'white',minWidth:240}}/></form></div><div className="grid-auto">{files.map(f=><Link className="glass file-card" style={{padding:10}} href={`/file/${f.id}`} key={f.id}><div className="preview">{f.mimeType.startsWith('image/')?<img src={`/api/files/${f.id}/preview`} alt=""/>:<span className="accent">{f.extension?.toUpperCase()||'FILE'}</span>}</div><div style={{padding:'14px 4px'}}><strong>{f.title||f.originalName}</strong><p className="muted" style={{fontSize:13}}>{f.tags.map(t=>'#'+t.tag.name).join(' ')}</p></div></Link>)}</div>{!files.length&&<p className="muted">No works found. Try another keyword.</p>}</main>}
+import Link from 'next/link';
+import { db } from '@/lib/db';
+
+export default async function WorksPage({
+  searchParams,
+}: {
+  searchParams?: { q?: string };
+}) {
+  const query = searchParams?.q?.trim() || '';
+
+  const files = await db.file.findMany({
+    where: {
+      visibility: 'PUBLIC',
+      deletedAt: null,
+      ...(query
+        ? {
+            OR: [
+              { title: { contains: query, mode: 'insensitive' } },
+              { originalName: { contains: query, mode: 'insensitive' } },
+              { description: { contains: query, mode: 'insensitive' } },
+              { tags: { some: { tag: { name: { contains: query, mode: 'insensitive' } } } } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: { publishedAt: 'desc' },
+    include: { tags: { include: { tag: true } } },
+    take: 60,
+  });
+
+  return (
+    <main className="shell" style={{ paddingTop: 32, paddingBottom: 80 }}>
+      <Link href="/" className="muted">← Back to archive</Link>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 20, flexWrap: 'wrap', marginTop: 72, marginBottom: 36 }}>
+        <div>
+          <p className="accent">THE ARCHIVE</p>
+          <h1 style={{ fontSize: 'clamp(2.5rem, 6vw, 4.5rem)', margin: 0 }}>Works</h1>
+        </div>
+
+        <form>
+          <input
+            name="q"
+            defaultValue={query}
+            placeholder="Search archive…"
+            style={{
+              minWidth: 220,
+              background: '#17131f',
+              color: '#fff',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 999,
+              padding: '12px 16px',
+            }}
+          />
+        </form>
+      </div>
+
+      <div className="grid-auto">
+        {files.length ? (
+          files.map((file) => (
+            <Link key={file.id} href={`/file/${file.id}`} className="glass file-card" style={{ padding: 10 }}>
+              <div className="preview">
+                {file.mimeType.startsWith('image/') ? (
+                  <img src={`/api/files/${file.id}/preview`} alt={file.title || file.originalName} />
+                ) : (
+                  <span className="accent" style={{ fontSize: 26, letterSpacing: '0.12em' }}>
+                    {file.extension?.toUpperCase() || 'FILE'}
+                  </span>
+                )}
+              </div>
+              <div style={{ padding: '14px 4px 6px' }}>
+                <strong>{file.title || file.originalName}</strong>
+                <p className="muted" style={{ margin: '8px 0 0', fontSize: 12 }}>
+                  {file.tags.map((t) => `#${t.tag.name}`).join(' ')}
+                </p>
+              </div>
+            </Link>
+          ))
+        ) : (
+          <p className="muted">No works found. Try another keyword.</p>
+        )}
+      </div>
+    </main>
+  );
+}

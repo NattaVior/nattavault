@@ -1,2 +1,119 @@
-import Link from 'next/link'; import { db } from '@/lib/db';
-export default async function Home(){const [files,collections,count]=await Promise.all([db.file.findMany({where:{visibility:'PUBLIC',deletedAt:null},orderBy:{publishedAt:'desc'},take:6,include:{tags:{include:{tag:true}}}}),db.collection.findMany({where:{visibility:'PUBLIC'},orderBy:{createdAt:'desc'},take:3}),db.file.count({where:{deletedAt:null}})]);return <main><header className="shell" style={{paddingTop:28,display:'flex',justifyContent:'space-between'}}><strong style={{letterSpacing:'.12em'}}>NATTAVAULT</strong><Link className="muted" href="/login">Archive access ↗</Link></header><section className="shell hero" style={{paddingTop:'15vh',paddingBottom:'15vh'}}><p className="accent" style={{letterSpacing:'.18em'}}>PERSONAL DIGITAL ARCHIVE</p><h1 style={{fontSize:'clamp(4rem,10vw,8rem)',lineHeight:.95,maxWidth:850,margin:'22px 0'}}>Things I’ve made.</h1><p className="muted" style={{fontSize:20,maxWidth:500,lineHeight:1.6}}>A living collection of experiments, objects, images, and ideas. Curated slowly, shared intentionally.</p><div style={{display:'flex',gap:12,marginTop:30}}><Link className="btn btn-primary" href="/works">Explore works</Link><Link className="btn" href="#about">About this archive</Link></div></section><section className="shell" style={{paddingBottom:90}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'end',marginBottom:24}}><div><p className="accent">01 / SELECTED</p><h2>Featured works</h2></div><Link className="muted" href="/works">View archive →</Link></div><div className="grid-auto">{files.length?files.map(f=><Link className="glass file-card" style={{padding:10}} href={`/file/${f.id}`} key={f.id}><div className="preview">{f.mimeType.startsWith('image/')?<img src={`/api/files/${f.id}/preview`} alt=""/>:<span className="accent">{f.extension?.toUpperCase()||'FILE'}</span>}</div><div style={{padding:'14px 4px'}}><strong>{f.title||f.originalName}</strong><p className="muted" style={{margin:'7px 0 0',fontSize:13}}>{f.mimeType} · {Math.round(Number(f.size)/1024)} KB</p></div></Link>):<p className="muted">The archive is quiet for now.</p>}</div></section><section className="shell" id="about" style={{paddingBottom:90}}><p className="accent">02 / COLLECTIONS</p><h2>Organized by curiosity.</h2><div className="grid-auto">{collections.map(c=><Link className="glass" style={{padding:24,minHeight:150}} href={`/collection/${c.slug}`} key={c.id}><h3>{c.name}</h3><p className="muted">{c.description}</p><span className="accent">Open collection →</span></Link>)}</div></section><footer className="shell muted" style={{borderTop:'1px solid #282332',paddingTop:24,paddingBottom:40,display:'flex',justifyContent:'space-between'}}> <span>NattaVault · Things I’ve made.</span><span>{count} archived files</span></footer></main>}
+import Link from 'next/link';
+import { db } from '@/lib/db';
+
+export default async function HomePage() {
+  const [featured, collections, totalFiles] = await Promise.all([
+    db.file.findMany({
+      where: { visibility: 'PUBLIC', deletedAt: null },
+      orderBy: { publishedAt: 'desc' },
+      take: 6,
+      include: { tags: { include: { tag: true } } },
+    }),
+    db.collection.findMany({
+      where: { visibility: 'PUBLIC' },
+      orderBy: { createdAt: 'desc' },
+      take: 4,
+    }),
+    db.file.count({ where: { visibility: 'PUBLIC', deletedAt: null } }),
+  ]);
+
+  const archiveSize = await db.file.aggregate({
+    _sum: { size: true },
+    where: { visibility: 'PUBLIC', deletedAt: null },
+  });
+
+  return (
+    <main>
+      <header className="shell" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 28 }}>
+        <strong style={{ letterSpacing: '0.18em' }}>NATTAVAULT</strong>
+        <Link href="/login" className="muted">Archive access →</Link>
+      </header>
+
+      <section className="shell" style={{ paddingTop: '10vh', paddingBottom: '10vh' }}>
+        <p className="accent" style={{ letterSpacing: '0.18em', marginBottom: 18 }}>PERSONAL DIGITAL ARCHIVE</p>
+        <h1 className="hero-title">Things I’ve made.</h1>
+        <p className="muted" style={{ maxWidth: 620, fontSize: 20, lineHeight: 1.6, marginTop: 24 }}>
+          A curated collection of digital work, experiments, prototypes, and process.
+        </p>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 30 }}>
+          <Link href="/works" className="btn btn-primary">Explore works</Link>
+          <Link href="#about" className="btn">About this archive</Link>
+        </div>
+      </section>
+
+      <section className="shell" style={{ paddingBottom: 80 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <p className="accent">01 / FEATURED</p>
+            <h2>Featured works</h2>
+          </div>
+          <Link href="/works" className="muted">View all →</Link>
+        </div>
+
+        <div className="grid-auto">
+          {featured.length ? (
+            featured.map((file) => (
+              <Link key={file.id} href={`/file/${file.id}`} className="glass file-card" style={{ padding: 10 }}>
+                <div className="preview">
+                  {file.mimeType.startsWith('image/') ? (
+                    <img src={`/api/files/${file.id}/preview`} alt={file.title || file.originalName} />
+                  ) : (
+                    <span className="accent" style={{ fontSize: 24, letterSpacing: '0.12em' }}>
+                      {file.extension?.toUpperCase() || 'FILE'}
+                    </span>
+                  )}
+                </div>
+                <div style={{ padding: '14px 4px 6px' }}>
+                  <strong>{file.title || file.originalName}</strong>
+                  <p className="muted" style={{ margin: '8px 0 0', fontSize: 13 }}>
+                    {file.mimeType} · {Math.max(1, Math.round(Number(file.size) / 1024))} KB
+                  </p>
+                </div>
+              </Link>
+            ))
+          ) : (
+            <p className="muted">The archive is quiet for now.</p>
+          )}
+        </div>
+      </section>
+
+      <section id="about" className="shell" style={{ paddingBottom: 80 }}>
+        <p className="accent">02 / COLLECTIONS</p>
+        <h2>Organized by curiosity.</h2>
+        <div className="grid-auto" style={{ marginTop: 20 }}>
+          {collections.map((collection) => (
+            <Link key={collection.id} href={`/collection/${collection.slug}`} className="glass" style={{ padding: 24, minHeight: 160 }}>
+              <p className="muted">Collection</p>
+              <h3>{collection.name}</h3>
+              <p className="muted" style={{ marginTop: 12 }}>{collection.description || 'A public set of works.'}</p>
+              <span className="accent">Open collection →</span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="shell" style={{ paddingBottom: 90 }}>
+        <div className="grid-auto">
+          <div className="glass" style={{ padding: 28 }}>
+            <p className="muted">Archive size</p>
+            <strong style={{ fontSize: 32 }}>{((Number(archiveSize._sum.size || 0) / 1024 / 1024 / 1024)).toFixed(1)} GB</strong>
+          </div>
+          <div className="glass" style={{ padding: 28 }}>
+            <p className="muted">Public works</p>
+            <strong style={{ fontSize: 32 }}>{totalFiles}</strong>
+          </div>
+          <div className="glass" style={{ padding: 28 }}>
+            <p className="muted">Collections</p>
+            <strong style={{ fontSize: 32 }}>{collections.length}</strong>
+          </div>
+        </div>
+      </section>
+
+      <footer className="shell muted" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, paddingBottom: 40, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.09)', flexWrap: 'wrap' }}>
+        <span>NattaVault</span>
+        <span>© 2026</span>
+        <span>Public archive</span>
+      </footer>
+    </main>
+  );
+}

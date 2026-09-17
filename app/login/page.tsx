@@ -1,2 +1,70 @@
-'use client'; import { useState } from 'react'; import { useRouter } from 'next/navigation'; import Link from 'next/link';
-export default function Login(){const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);const router=useRouter();async function submit(e:React.FormEvent){e.preventDefault();setBusy(true);const r=await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,password})});if(r.ok)router.push('/admin');else setError((await r.json()).error);setBusy(false)}return <main className="shell" style={{maxWidth:500,paddingTop:'15vh'}}><Link className="muted" href="/">← NattaVault</Link><h1 style={{marginTop:70}}>Archive access</h1><p className="muted">Private tools for the owner.</p><form onSubmit={submit} className="glass" style={{padding:24,display:'grid',gap:15,marginTop:28}}><input required type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} style={{padding:14,background:'#0f0c15',border:'1px solid #3c3548',color:'white',borderRadius:10}}/><input required type="password" placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} style={{padding:14,background:'#0f0c15',border:'1px solid #3c3548',color:'white',borderRadius:10}}/>{error&&<p style={{color:'#ff9b9b'}}>{error}</p>}<button className="btn btn-primary" disabled={busy}>{busy?'Checking…':'Sign in'}</button></form></main>}
+'use client';
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+
+export default function LoginPage() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [pending, setPending] = useState(false);
+  const router = useRouter();
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPending(true);
+    setError('');
+
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (response.ok) {
+      router.push('/admin');
+      return;
+    }
+
+    const body = await response.json();
+    setError(body.error || 'Something went wrong');
+    setPending(false);
+  }
+
+  return (
+    <main className="shell" style={{ maxWidth: 520, paddingTop: '16vh', paddingBottom: 80 }}>
+      <Link href="/" className="muted">← NattaVault</Link>
+
+      <div className="glass" style={{ padding: 32, marginTop: 36 }}>
+        <p className="accent">ARCHIVE ACCESS</p>
+        <h1 style={{ marginTop: 12, marginBottom: 8 }}>Private dashboard</h1>
+        <p className="muted">Sign in to manage uploads, collections, and visibility.</p>
+
+        <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 16, marginTop: 28 }}>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            required
+            style={{ padding: 14, borderRadius: 10, background: '#0d0b12', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            required
+            style={{ padding: 14, borderRadius: 10, background: '#0d0b12', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+          />
+
+          {error ? <p style={{ color: '#f1a4a4', margin: 0 }}>{error}</p> : null}
+
+          <button className="btn btn-primary" disabled={pending}>
+            {pending ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+      </div>
+    </main>
+  );
+}
