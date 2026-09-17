@@ -1,21 +1,13 @@
-# NattaVault Security Notes
+# NattaVault security
 
-## Authentication and authorization
-Sessions are signed JWTs stored in an httpOnly, Secure-in-production, SameSite=Lax cookie. Every protected request verifies the token and then reloads the user from PostgreSQL, requiring an existing active ADMIN account. JWT role claims are not trusted.
+Protected requests verify a signed session and reload the current user from PostgreSQL; the user must exist, be active, and have the ADMIN role. State-changing browser requests use strict Origin validation with a Referer fallback; cookie-authenticated requests without either header are rejected. SameSite=Lax and httpOnly cookies remain enabled.
 
-## CSRF
-State-changing routes validate the browser `Origin` against `PUBLIC_SITE_URL`; requests without an Origin remain usable for non-browser API clients. SameSite=Lax limits ambient cookie transmission. Deployments should set `PUBLIC_SITE_URL` to the exact canonical origin.
+Login, uploads, signed previews/downloads, and share-token routes use a process-local rate limiter. It is only a baseline for a single instance; production horizontal deployments must replace it with shared Redis/KV enforcement.
 
-## Rate limiting
-Login, uploads, share-link creation, and other signed-access paths use a lightweight process-local limiter. This is a best-effort fallback only; horizontally scaled deployments should replace it with a shared Redis/KV implementation before production.
+Uploads are size-limited, extension/MIME allowlisted, sanitized, UUID-keyed, checksummed, and signature-checked for PNG, JPEG, WebP, PDF, MP3, and MP4. No malware scanner exists. HTML, JavaScript, SVG, XML, and similar active content are forced to attachment disposition with an octet-stream response type rather than inline execution.
 
-## Upload and active content security
-Uploads use a size limit, allowlisted extensions, MIME checks, sanitized UUID-prefixed keys, SHA-256 checksums, and signatures for PNG, JPEG, WebP, PDF, MP3, and MP4. SVG, HTML, JavaScript, XML, archives, and unsupported binaries are not malware-scanned. Active content is forced to attachment disposition when previewed.
+Normal deletion is soft deletion. Admin-only permanent deletion removes the storage object first and then the database row; if storage deletion fails, the database row is retained. Orphan discovery still depends on a provider-specific object listing job and is not exposed publicly.
 
-## Storage and deletion
-Objects are stored in a private S3-compatible bucket and exposed only through five-minute signed URLs. Normal deletion is a database soft delete so records can be restored. A permanent cleanup job is still required for old soft-deleted records and orphaned objects; it must run with admin credentials and never be public.
+Public routes only expose PUBLIC, non-deleted files. PRIVATE files require an active admin session; UNLISTED files are excluded from discovery and sitemap. Signed URLs expire after five minutes and are only generated after visibility and permission checks.
 
-## Visibility
-PRIVATE files require an active admin session. PUBLIC files are discoverable only when published. UNLISTED files are excluded from public search, collections, and sitemap and should be shared through direct links or share tokens.
-
-Runtime npm, Prisma, TypeScript, ESLint, build, PostgreSQL, and S3 validation were not performed in the static-only audit environment.
+Runtime npm, Prisma, TypeScript, ESLint, build, PostgreSQL, and S3 validation are intentionally pending.
