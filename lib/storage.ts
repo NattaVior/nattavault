@@ -8,30 +8,36 @@ export interface StorageProvider {
   createSignedUrl(key: string, download?: boolean, contentType?: string): Promise<string>;
 }
 
-const client = new S3Client({
-  region: process.env.STORAGE_REGION || 'auto',
-  endpoint: process.env.STORAGE_ENDPOINT || undefined,
-  forcePathStyle: Boolean(process.env.STORAGE_ENDPOINT),
-  credentials: process.env.STORAGE_ACCESS_KEY
-    ? { accessKeyId: process.env.STORAGE_ACCESS_KEY, secretAccessKey: process.env.STORAGE_SECRET_KEY || '' }
-    : undefined,
-});
-const bucket = process.env.STORAGE_BUCKET || 'nattavault';
+function storageConfig() {
+  const bucket = process.env.STORAGE_BUCKET?.trim();
+  const region = process.env.STORAGE_REGION?.trim();
+  const accessKey = process.env.STORAGE_ACCESS_KEY?.trim();
+  const secretKey = process.env.STORAGE_SECRET_KEY?.trim();
+  if (!bucket || !region || !accessKey || !secretKey) {
+    throw new Error('Object storage is not configured. Set STORAGE_REGION, STORAGE_BUCKET, STORAGE_ACCESS_KEY, and STORAGE_SECRET_KEY.');
+  }
+  return { bucket, region, accessKey, secretKey, endpoint: process.env.STORAGE_ENDPOINT?.trim() || undefined };
+}
+
+function clientAndBucket() {
+  const config = storageConfig();
+  return {
+    bucket: config.bucket,
+    client: new S3Client({ region: config.region, endpoint: config.endpoint, forcePathStyle: Boolean(config.endpoint), credentials: { accessKeyId: config.accessKey, secretAccessKey: config.secretKey } }),
+  };
+}
 
 export const storage: StorageProvider = {
   async upload(key, body, contentType) {
+    const { client, bucket } = clientAndBucket();
     await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType, ServerSideEncryption: 'AES256' }));
   },
-  async delete(key) { await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })); },
+  async delete(key) { const { client, bucket } = clientAndBucket(); await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })); },
   async exists(key) {
-    try { await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key })); return true; } catch { return false; }
+    try { const { client, bucket } = clientAndBucket(); await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key })); return true; } catch { return false; }
   },
   async createSignedUrl(key, download = false, contentType) {
-    return getSignedUrl(client, new GetObjectCommand({
-      Bucket: bucket,
-      Key: key,
-      ...(contentType ? { ResponseContentType: contentType } : {}),
-      ResponseContentDisposition: download ? 'attachment' : 'inline',
-    }), { expiresIn: 300 });
+    const { client, bucket } = clientAndBucket();
+    return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key, ...(contentType ? { ResponseContentType: contentType } : {}), ResponseContentDisposition: download ? 'attachment' : 'inline' }), { expiresIn: 300 });
   },
 };

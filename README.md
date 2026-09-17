@@ -2,51 +2,36 @@
 
 NattaVault is a personal digital archive with a curated public portfolio and a protected private asset manager.
 
-## What is implemented
-- Next.js 14 App Router, TypeScript, Prisma/PostgreSQL, and private S3-compatible storage.
-- Public archive pages, search, file previews, public collections, visibility-aware file pages, and signed access for protected content.
-- Protected admin dashboard, file manager, metadata editor, upload flow, folder and tag management, collection management, analytics, storage overview, activity logs, and share links.
-- Relational organization for files, folders, tags, collections, audit events, and share tokens.
+## First-time setup (development)
 
-## Local setup
-```bash
-cp .env.example .env
-npm install
-npx prisma generate
-npx prisma db push
-npm run db:seed
-npm run dev
-```
+1. Install Node.js 20 LTS or newer.
+2. Install dependencies: `npm install`.
+3. Copy `.env.example` to `.env` and replace the development placeholders.
+4. Install and configure PostgreSQL, then set `DATABASE_URL` to the database connection string.
+5. Generate Prisma Client and apply the development schema: `npm run db:generate` followed by `npm run db:push`.
+6. Seed the development admin and baseline records: `npm run db:seed`.
+7. Configure an S3-compatible private bucket and its credentials in `.env`.
+8. Start the development server: `npm run dev`.
+9. When preparing a deployment, create the production bundle with `npm run build`, then run it with `npm start`.
 
-You need PostgreSQL and a private S3-compatible bucket (AWS S3, DigitalOcean Spaces, Cloudflare R2, MinIO, or similar). Set the required environment variables in `.env`.
+The seed command requires `ADMIN_EMAIL` and `ADMIN_PASSWORD`; it does not provide insecure fallback credentials. Never use development credentials in production.
 
-## Required environment variables
-- `DATABASE_URL`
-- `AUTH_SECRET`
-- `STORAGE_ENDPOINT`
-- `STORAGE_REGION`
-- `STORAGE_BUCKET`
-- `STORAGE_ACCESS_KEY`
-- `STORAGE_SECRET_KEY`
-- `PUBLIC_SITE_URL`
-- `ADMIN_EMAIL`
-- `ADMIN_PASSWORD`
-- `MAX_UPLOAD_BYTES`
+## Environment variables
 
-## Security notes
-Files are private by default, object URLs are never exposed in the public UI, and private preview/download routes authorize access before issuing signed URLs. Uploads validate size, content type, and a basic file signature check. Keep the storage bucket private, rotate credentials, and add malware scanning or media processing workers in production for untrusted uploads.
+Required variables are documented in `.env.example`: `DATABASE_URL`, `AUTH_SECRET`, `STORAGE_ENDPOINT` (optional for AWS S3, required for non-AWS endpoints), `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, `PUBLIC_SITE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `MAX_UPLOAD_BYTES`. None use `NEXT_PUBLIC_`, so server secrets are not bundled for the client.
 
-## Admin routes
-- `/admin`
-- `/admin/files`
-- `/admin/files/[id]`
-- `/admin/upload`
-- `/admin/folders`
-- `/admin/tags`
-- `/admin/collections`
-- `/admin/analytics`
-- `/admin/activity`
-- `/admin/storage`
+## Production deployment checklist
 
-## Production caveat
-The upload route buffers files in the Next.js process. For very large assets, add a direct-to-object-storage multipart flow for better scaling. Thumbnail generation should be handled by a dedicated worker (Sharp/FFmpeg/Poppler) if you need optimized gallery images and document previews in production.
+- [ ] PostgreSQL is provisioned, reachable, backed up, and migrations/schema changes are managed deliberately.
+- [ ] S3-compatible storage is configured with a private bucket and least-privilege credentials.
+- [ ] A long random `AUTH_SECRET` is configured through the secret manager.
+- [ ] Unique administrator credentials are configured; development defaults are not used.
+- [ ] `PUBLIC_SITE_URL` is the canonical HTTPS origin.
+- [ ] HTTPS is enforced at the proxy/load balancer.
+- [ ] Rate limiting uses shared Redis/KV or equivalent storage for multi-instance deployments.
+- [ ] Malware scanning is added if required by the deployment threat model; it is not built in.
+- [ ] Database, storage, application logs, error monitoring, and alerting are configured.
+
+## Runtime status
+
+Runtime validation is pending. This repository audit did not run npm, Prisma, TypeScript, ESLint, or the production build.

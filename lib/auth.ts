@@ -3,7 +3,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 
 function authSecret() {
-  const value = process.env.AUTH_SECRET;
+  const value = process.env.AUTH_SECRET?.trim();
   if (value) return new TextEncoder().encode(value);
   if (process.env.NODE_ENV === 'production') throw new Error('AUTH_SECRET is required in production.');
   return new TextEncoder().encode('development-only-secret-change-me');
