@@ -1,0 +1,3 @@
+import { NextResponse } from 'next/server'; import type {NextRequest} from 'next/server';
+export function middleware(req:NextRequest){if(req.nextUrl.pathname.startsWith('/admin')){if(!req.cookies.get('nv_session')) return NextResponse.redirect(new URL('/login',req.url));} const res=NextResponse.next(); res.headers.set('X-Content-Type-Options','nosniff');res.headers.set('X-Frame-Options','DENY');res.headers.set('Referrer-Policy','strict-origin-when-cross-origin');res.headers.set('Content-Security-Policy',"default-src 'self'; img-src 'self' data: https:; media-src 'self' https:; frame-src 'self' https:; object-src 'none'; base-uri 'self';");return res}
+export const config={matcher:['/admin/:path*','/((?!_next/static|_next/image|favicon.ico).*)']};

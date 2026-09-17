@@ -1,0 +1,18 @@
+generator client { provider = "prisma-client-js" }
+
+datasource db { provider = "postgresql" url = env("DATABASE_URL") }
+
+enum Role { ADMIN }
+enum Visibility { PRIVATE PUBLIC UNLISTED }
+enum EventType { FILE_VIEW FILE_DOWNLOAD COLLECTION_VIEW SHARE_USED }
+
+model User { id String @id @default(cuid()); email String @unique; passwordHash String; role Role @default(ADMIN); createdAt DateTime @default(now()); updatedAt DateTime @updatedAt; auditLogs AuditLog[] }
+model File { id String @id @default(cuid()); originalName String; storedName String; extension String?; mimeType String; size BigInt; checksum String?; storageProvider String @default("s3"); storageKey String @unique; visibility Visibility @default(PRIVATE); title String?; description String?; width Int?; height Int?; duration Float?; pageCount Int?; allowDownload Boolean @default(true); featured Boolean @default(false); folderId String?; folder Folder? @relation(fields:[folderId], references:[id], onDelete:SetNull); tags FileTag[]; collections CollectionFile[]; shareLinks ShareLink[]; events Event[]; createdAt DateTime @default(now()); updatedAt DateTime @updatedAt; publishedAt DateTime?; deletedAt DateTime?; @@index([visibility, publishedAt]); @@index([folderId]) }
+model Folder { id String @id @default(cuid()); name String; parentId String?; parent Folder? @relation("FolderTree", fields:[parentId], references:[id], onDelete:Cascade); children Folder[] @relation("FolderTree"); files File[]; createdAt DateTime @default(now()); updatedAt DateTime @updatedAt; @@unique([parentId,name]) }
+model Tag { id String @id @default(cuid()); name String @unique; files FileTag[] }
+model FileTag { fileId String; tagId String; file File @relation(fields:[fileId], references:[id], onDelete:Cascade); tag Tag @relation(fields:[tagId], references:[id], onDelete:Cascade); @@id([fileId,tagId]) }
+model Collection { id String @id @default(cuid()); name String; slug String @unique; description String?; coverFileId String?; visibility Visibility @default(PRIVATE); files CollectionFile[]; events Event[]; createdAt DateTime @default(now()); updatedAt DateTime @updatedAt }
+model CollectionFile { collectionId String; fileId String; order Int @default(0); collection Collection @relation(fields:[collectionId], references:[id], onDelete:Cascade); file File @relation(fields:[fileId], references:[id], onDelete:Cascade); @@id([collectionId,fileId]) }
+model ShareLink { id String @id @default(cuid()); fileId String; token String @unique; expiresAt DateTime?; downloadAllowed Boolean @default(true); createdAt DateTime @default(now()); file File @relation(fields:[fileId], references:[id], onDelete:Cascade) }
+model Event { id String @id @default(cuid()); type EventType; fileId String?; collectionId String?; createdAt DateTime @default(now()); file File? @relation(fields:[fileId], references:[id], onDelete: SetNull); collection Collection? @relation(fields:[collectionId], references:[id], onDelete: SetNull); @@index([type,createdAt]) }
+model AuditLog { id String @id @default(cuid()); action String; entityId String?; details String?; userId String; createdAt DateTime @default(now()); user User @relation(fields:[userId], references:[id], onDelete:Cascade) }
