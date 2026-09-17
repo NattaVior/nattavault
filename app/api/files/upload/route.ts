@@ -1,45 +1,74 @@
 import { NextResponse } from 'next/server';
-import { redirect } from 'next/navigation';
-import { requireUser } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { extension, safeName } from '@/lib/security';
-import { storage } from '@/lib/storage';
+import { requireUser } from '@/lib/auth';
+import { normalizeTagName } from '@/lib/security';
 
-export async function POST(req: Request) {
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
   try {
     await requireUser();
-    const formData = await req.formData();
-    const file = formData.get('file');
-
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-    }
-
-    const maxUploadBytes = Number(process.env.MAX_UPLOAD_BYTES || 524288000);
-    if (file.size > maxUploadBytes) {
-      return NextResponse.json({ error: 'File exceeds the configured file size limit.' }, { status: 413 });
-    }
-
-    const key = `uploads/${crypto.randomUUID()}-${safeName(file.name)}`;
-    const buffer = Buffer.from(await file.arrayBuffer());
-
-    await storage.upload(key, buffer, file.type || 'application/octet-stream');
-
-    const record = await db.file.create({
-      data: {
-        originalName: file.name,
-        storedName: file.name,
-        storageKey: key,
-        mimeType: file.type || 'application/octet-stream',
-        extension: extension(file.name),
-        size: BigInt(file.size),
-        visibility: 'PRIVATE',
-      },
+    const file = await db.file.findUnique({
+      where: { id: params.id },
+      include: { tags: { include: { tag: true } }, folder: true },
     });
 
-    return NextResponse.json({ ok: true, id: record.id, name: record.originalName });
+    if (!file) return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    return NextResponse.json({ ...file, size: file.size.toString() });
+  } catch {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+}
+
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  try {
+    const userId = await requireUser();
+    const body = await req.json();
+    const file = await db.file.findUnique({ where: { id: params.id } });
+    if (!file) return NextResponse.json({ error: 'File not found' }, { status: 404 });
+
+    const folderId = body.folderId === '' ? null : body.folderId || file.folderId;
+    if (body.folderId && body.folderId !== '') {
+      const folderExists = await db.folder.findUnique({ where: { id: body.folderId } });
+      if (!folderExists) return NextResponse.json({ error: 'Folder not found' }, { status: 400 });
+    }
+
+    const updatePayload: any = {
+      title: body.title !== undefined ? (body.title ? String(body.title) : null) : undefined,
+      description: body.description !== undefined ? (body.description ? String(body.description) : null) : undefined,
+      folderId,
+      visibility: body.visibility || undefined,
+      allowDownload: body.allowDownload !== undefined ? Boolean(body.allowDownload) : undefined,
+      featured: body.featured !== undefined ? Boolean(body.featured) : undefined,
+    };
+
+    const updated = await db.$transaction(async (tx) => {
+      if (Array.isArray(body.tagNames)) {
+        await tx.fileTag.deleteMany({ where: { fileId: file.id } });
+        for (const rawName of body.tagNames) {
+          const name = normalizeTagName(String(rawName));
+          if (!name) continue;
+          const tag = await tx.tag.upsert({ where: { name }, update: {}, create: { name } });
+          await tx.fileTag.create({ data: { fileId: file.id, tagId: tag.id } });
+        }
+      }
+
+      const next = await tx.file.update({ where: { id: file.id }, data: updatePayload });
+      await tx.auditLog.create({ data: { action: 'metadata_change', entityId: file.id, userId, details: 'file metadata updated' } });
+      return next;
+    });
+
+    return NextResponse.json({ ok: true, file: updated });
   } catch (error) {
-    console.error('Upload failed:', error);
-    return NextResponse.json({ error: 'Something went wrong while uploading this file.' }, { status: 500 });
+    return NextResponse.json({ error: 'Unable to update file metadata.' }, { status: 400 });
+  }
+}
+
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  try {
+    const userId = await requireUser();
+    const file = await db.file.update({ where: { id: params.id }, data: { deletedAt: new Date() } });
+    await db.auditLog.create({ data: { action: 'delete', entityId: file.id, userId } });
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: 'Unable to delete file.' }, { status: 400 });
   }
 }

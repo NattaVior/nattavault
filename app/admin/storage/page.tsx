@@ -1,2 +1,47 @@
-import { redirect } from 'next/navigation'; import Link from 'next/link'; import { requireUser } from '@/lib/auth'; import { db } from '@/lib/db';
-export default async function StoragePage(){try{await requireUser()}catch{redirect('/login')}const [count,sum,largest]=await Promise.all([db.file.count({where:{deletedAt:null}}),db.file.aggregate({_sum:{size:true},where:{deletedAt:null}}),db.file.findMany({where:{deletedAt:null},orderBy:{size:'desc'},take:10,select:{id:true,originalName:true,size:true}})]);return <main className="shell" style={{paddingTop:32,paddingBottom:80}}><Link href="/admin" className="muted">← Dashboard</Link><p className="accent" style={{marginTop:60}}>STORAGE</p><h1>Storage health</h1><div className="grid-auto" style={{marginTop:28}}><div className="glass" style={{padding:24}}><p className="muted">Provider</p><strong>S3-compatible</strong></div><div className="glass" style={{padding:24}}><p className="muted">Objects</p><strong>{count}</strong></div><div className="glass" style={{padding:24}}><p className="muted">Used</p><strong>{(Number(sum._sum.size||0)/1024/1024/1024).toFixed(2)} GB</strong></div></div><h2 style={{marginTop:50}}>Largest files</h2><div className="glass" style={{padding:20}}>{largest.map(f=><p key={f.id} style={{display:'flex',justifyContent:'space-between'}}><span>{f.originalName}</span><span className="muted">{(Number(f.size)/1024/1024).toFixed(1)} MB</span></p>)}</div></main>}
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { requireUser } from '@/lib/auth';
+import { db } from '@/lib/db';
+
+export default async function ActivityPage() {
+  try {
+    await requireUser();
+  } catch {
+    redirect('/login');
+  }
+
+  const logs = await db.auditLog.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+    include: { user: { select: { email: true } } },
+  });
+
+  return (
+    <main className="shell" style={{ paddingTop: 32, paddingBottom: 80 }}>
+      <Link href="/admin" className="muted">← Dashboard</Link>
+      <p className="accent" style={{ marginTop: 56 }}>AUDIT TRAIL</p>
+      <h1>Recent activity</h1>
+
+      <div className="glass" style={{ overflow: 'hidden', marginTop: 24 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
+              <th style={{ padding: 14, textAlign: 'left' }}>Action</th>
+              <th style={{ padding: 14, textAlign: 'left' }}>User</th>
+              <th style={{ padding: 14, textAlign: 'left' }}>Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map((log) => (
+              <tr key={log.id} style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <td style={{ padding: 14 }}><strong>{log.action}</strong><div className="muted">{log.entityId || '—'}</div></td>
+                <td style={{ padding: 14 }} className="muted">{log.user.email}</td>
+                <td style={{ padding: 14 }} className="muted">{new Date(log.createdAt).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </main>
+  );
+}

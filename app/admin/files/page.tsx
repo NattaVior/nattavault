@@ -1,5 +1,45 @@
-'use client';
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { NextResponse } from 'next/server';
+import { requireUser } from '@/lib/auth';
+import { db } from '@/lib/db';
+import { extension, safeName, validateMagicBytes, validateUpload } from '@/lib/security';
+import { storage } from '@/lib/storage';
 
-export default function AdminFilesPage() { const [data, setData] = useState<any>({ items: [], pages: 0, page: 1 }); const [q, setQ] = useState(''); const [loading, setLoading] = useState(true); const [selected, setSelected] = useState<string[]>([]); const load = async (page = 1) => { setLoading(true); const r = await fetch(`/api/files?q=${encodeURIComponent(q)}&page=${page}`); if (r.ok) setData(await r.json()); setLoading(false); }; useEffect(() => { const t = setTimeout(() => load(), 250); return () => clearTimeout(t); }, [q]); const remove = async (id: string) => { if (!confirm('Move this file to trash?')) return; await fetch(`/api/files/${id}`, { method: 'DELETE' }); load(data.page); }; return <main className="shell" style={{ paddingTop: 32, paddingBottom: 80 }}><Link href="/admin" className="muted">← Dashboard</Link><div style={{ display:'flex', justifyContent:'space-between', alignItems:'end', gap:16, flexWrap:'wrap', margin:'60px 0 24px' }}><div><p className="accent">FILE MANAGER</p><h1>Archive files</h1></div><Link className="btn btn-primary" href="/admin/upload">Upload</Link></div><input aria-label="Search files" value={q} onChange={e=>setQ(e.target.value)} placeholder="Search filename, title, description, tags…" style={{ width:'100%', maxWidth:620, padding:14, background:'#17131f', border:'1px solid #3c3548', borderRadius:12, color:'#fff', marginBottom:20 }} />{loading?<p className="muted">Loading files…</p>:<><div className="grid-auto">{data.items.map((f:any)=><article className="glass" style={{ padding:12 }} key={f.id}><div className="preview">{f.mimeType.startsWith('image/')?<img src={`/api/files/${f.id}/preview`} alt=""/>:<span className="accent">{f.extension?.toUpperCase()||'FILE'}</span>}</div><div style={{padding:'12px 4px'}}><strong>{f.title||f.originalName}</strong><p className="muted" style={{fontSize:12}}>{f.visibility} · {f.folder?.name||'Unfiled'}</p><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><Link className="btn" href={`/admin/files/${f.id}`}>Edit</Link><button className="btn" onClick={()=>remove(f.id)}>Trash</button></div></div></article>)}</div><div style={{display:'flex',gap:10,marginTop:26}}>{Array.from({length:data.pages},(_,i)=><button className="btn" key={i} disabled={data.page===i+1} onClick={()=>load(i+1)}>{i+1}</button>)}</div></>}</main> }
+export async function POST(req: Request) {
+  try {
+    await requireUser();
+    const formData = await req.formData();
+    const file = formData.get('file');
+
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: 'No file provided.' }, { status: 400 });
+    }
+
+    const maxUploadBytes = Number(process.env.MAX_UPLOAD_BYTES || 524288000);
+    const uploadInfo = validateUpload(file, maxUploadBytes);
+    const fileBuffer = Buffer.from(await file.arrayBuffer());
+    validateMagicBytes(fileBuffer, file.type || uploadInfo.mime || 'application/octet-stream');
+
+    const key = `uploads/${crypto.randomUUID()}-${uploadInfo.safeName}`;
+    await storage.upload(key, fileBuffer, file.type || 'application/octet-stream');
+
+    const record = await db.file.create({
+      data: {
+        originalName: file.name,
+        storedName: uploadInfo.safeName,
+        storageKey: key,
+        mimeType: file.type || 'application/octet-stream',
+        extension: extension(file.name),
+        size: BigInt(file.size),
+        visibility: 'PRIVATE',
+        title: file.name,
+      },
+    });
+
+    await db.auditLog.create({ data: { action: 'upload', entityId: record.id, userId: (await requireUser()) } });
+
+    return NextResponse.json({ ok: true, id: record.id, name: record.originalName });
+  } catch (error) {
+    console.error('Upload failed:', error);
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Something went wrong while uploading this file.' }, { status: 500 });
+  }
+}

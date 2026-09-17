@@ -1,12 +1,12 @@
 # NattaVault
 
-NattaVault is a personal digital archive with a curated public portfolio and a protected asset manager.
+NattaVault is a personal digital archive with a curated public portfolio and a protected private asset manager.
 
 ## What is implemented
-- Next.js 14 App Router, TypeScript, Prisma/PostgreSQL, and S3-compatible private storage.
-- Public archive, server-side search, public collections, visibility-aware file pages, signed previews/downloads, sitemap and robots rules.
-- Protected admin dashboard, paginated file manager, metadata editor, upload flow, folder/tag/collection APIs and admin views, analytics, storage overview, activity logs, and cryptographically random share links.
-- Relational file organization with folders, tags, collections, events, audit records, and expiring shares.
+- Next.js 14 App Router, TypeScript, Prisma/PostgreSQL, and private S3-compatible storage.
+- Public archive pages, search, file previews, public collections, visibility-aware file pages, and signed access for protected content.
+- Protected admin dashboard, file manager, metadata editor, upload flow, folder and tag management, collection management, analytics, storage overview, activity logs, and share links.
+- Relational organization for files, folders, tags, collections, audit events, and share tokens.
 
 ## Local setup
 ```bash
@@ -18,16 +18,35 @@ npm run db:seed
 npm run dev
 ```
 
-Required services are PostgreSQL and a private S3-compatible bucket (AWS S3, Cloudflare R2, MinIO, or equivalent). Configure `DATABASE_URL`, `AUTH_SECRET`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, and optionally `STORAGE_ENDPOINT`; also set `PUBLIC_SITE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `MAX_UPLOAD_BYTES`.
+You need PostgreSQL and a private S3-compatible bucket (AWS S3, DigitalOcean Spaces, Cloudflare R2, MinIO, or similar). Set the required environment variables in `.env`.
+
+## Required environment variables
+- `DATABASE_URL`
+- `AUTH_SECRET`
+- `STORAGE_ENDPOINT`
+- `STORAGE_REGION`
+- `STORAGE_BUCKET`
+- `STORAGE_ACCESS_KEY`
+- `STORAGE_SECRET_KEY`
+- `PUBLIC_SITE_URL`
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+- `MAX_UPLOAD_BYTES`
 
 ## Security notes
-Files are private by default, object URLs are never stored in public pages, and preview/download routes authorize private access before issuing five-minute signed URLs. Uploads use generated storage keys and sanitized names, with configurable size limits. Keep the bucket private, use TLS, rotate credentials, and add malware scanning/image processing in production for untrusted uploads.
+Files are private by default, object URLs are never exposed in the public UI, and private preview/download routes authorize access before issuing signed URLs. Uploads validate size, content type, and a basic file signature check. Keep the storage bucket private, rotate credentials, and add malware scanning or media processing workers in production for untrusted uploads.
 
 ## Admin routes
-- `/admin` dashboard
-- `/admin/files` paginated manager and `/admin/files/[id]` metadata editor
-- `/admin/upload`, `/admin/folders`, `/admin/tags`, `/admin/collections`
-- `/admin/analytics`, `/admin/activity`, `/admin/storage`
+- `/admin`
+- `/admin/files`
+- `/admin/files/[id]`
+- `/admin/upload`
+- `/admin/folders`
+- `/admin/tags`
+- `/admin/collections`
+- `/admin/analytics`
+- `/admin/activity`
+- `/admin/storage`
 
-## Limitations requiring infrastructure
-The upload endpoint buffers each request in the Next.js process. For very large assets, add a multipart direct-to-S3 flow using the same storage boundary. Thumbnail generation is intentionally graceful: browser-compatible previews use signed originals; production deployments should add an image/video/PDF worker (Sharp/FFmpeg/Poppler) and persist thumbnail keys.
+## Production caveat
+The upload route buffers files in the Next.js process. For very large assets, add a direct-to-object-storage multipart flow for better scaling. Thumbnail generation should be handled by a dedicated worker (Sharp/FFmpeg/Poppler) if you need optimized gallery images and document previews in production.
