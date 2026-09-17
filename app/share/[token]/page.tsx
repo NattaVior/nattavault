@@ -1,2 +1,19 @@
-import Link from 'next/link'; import { db } from '@/lib/db'; import { notFound } from 'next/navigation';
-export default async function SharePage({params}:{params:{token:string}}){const link=await db.shareLink.findUnique({where:{token:params.token},include:{file:true}});if(!link||link.file.deletedAt||(link.expiresAt&&link.expiresAt<new Date()))notFound();return <main className="shell" style={{maxWidth:760,paddingTop:'15vh'}}><p className="accent">SHARED FROM NATTAVAULT</p><h1>{link.file.title||link.file.originalName}</h1><p className="muted">{link.file.description||'A shared archive item.'}</p><div className="glass" style={{padding:30,marginTop:30}}><p>{link.file.mimeType} · {(Number(link.file.size)/1024/1024).toFixed(2)} MB</p><a className="btn btn-primary" href={`/api/share/${link.token}`}>Open file</a>{link.downloadAllowed&&<a className="btn" style={{marginLeft:10}} href={`/api/files/${link.fileId}/download`}>Download</a>}</div><Link className="muted" href="/" style={{display:'block',marginTop:30}}>NattaVault</Link></main>}
+import Link from 'next/link';
+import { db } from '@/lib/db';
+import { notFound } from 'next/navigation';
+
+export default async function SharePage({ params }: { params: { token: string } }) {
+  const link = await db.shareLink.findUnique({ where: { token: params.token }, include: { file: true } });
+  if (!link || link.file.deletedAt || (link.expiresAt && link.expiresAt <= new Date())) notFound();
+  return <main className="shell" style={{ maxWidth: 760, paddingTop: '15vh' }}>
+    <p className="accent">SHARED FROM NATTAVAULT</p>
+    <h1>{link.file.title || link.file.originalName}</h1>
+    <p className="muted">{link.file.description || 'A shared archive item.'}</p>
+    <div className="glass" style={{ padding: 30, marginTop: 30 }}>
+      <p>{link.file.mimeType} · {(Number(link.file.size) / 1024 / 1024).toFixed(2)} MB</p>
+      <a className="btn btn-primary" href={`/api/share/${link.token}`}>Open file</a>
+      {link.downloadAllowed && link.file.allowDownload ? <a className="btn" style={{ marginLeft: 10 }} href={`/api/share/${link.token}/download`}>Download</a> : null}
+    </div>
+    <Link className="muted" href="/" style={{ display: 'block', marginTop: 30 }}>NattaVault</Link>
+  </main>;
+}

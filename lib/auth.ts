@@ -1,27 +1,25 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 
-const secret = new TextEncoder().encode(process.env.AUTH_SECRET || 'development-only-secret-change-me');
+function authSecret() {
+  const value = process.env.AUTH_SECRET;
+  if (value) return new TextEncoder().encode(value);
+  if (process.env.NODE_ENV === 'production') throw new Error('AUTH_SECRET is required in production.');
+  return new TextEncoder().encode('development-only-secret-change-me');
+}
 
 export async function createSession(userId: string) {
   return new SignJWT({ userId })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
-    .sign(secret);
+    .sign(authSecret());
 }
 
 export async function getSession() {
-  const cookieStore = cookies();
-  const token = cookieStore.get('nv_session')?.value;
+  const token = cookies().get('nv_session')?.value;
   if (!token) return null;
-
-  try {
-    const payload = await jwtVerify(token, secret);
-    return payload.payload as { userId: string };
-  } catch {
-    return null;
-  }
+  try { return (await jwtVerify(token, authSecret())).payload as { userId: string }; } catch { return null; }
 }
 
 export async function requireUser() {
