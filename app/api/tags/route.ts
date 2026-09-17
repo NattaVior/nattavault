@@ -1,0 +1,8 @@
+import { NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+import { requireUser } from '@/lib/auth';
+
+export async function GET() { try { await requireUser(); return NextResponse.json(await db.tag.findMany({ include: { _count: { select: { files: true } } }, orderBy: { name: 'asc' } })); } catch { return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }); } }
+export async function POST(req: Request) { try { const userId = await requireUser(); const { name } = await req.json(); const normalized = String(name || '').trim().replace(/^#+/, '').replace(/\s+/g, '-').toLowerCase(); if (!normalized || normalized.length > 80) return NextResponse.json({ error: 'Invalid tag' }, { status: 400 }); const tag = await db.tag.create({ data: { name: normalized } }); await db.auditLog.create({ data: { action: 'tag_create', entityId: tag.id, userId } }); return NextResponse.json(tag, { status: 201 }); } catch { return NextResponse.json({ error: 'Tag already exists' }, { status: 409 }); } }
+export async function PATCH(req: Request) { try { await requireUser(); const { id, name } = await req.json(); return NextResponse.json(await db.tag.update({ where: { id }, data: { name: String(name).trim().toLowerCase() } })); } catch { return NextResponse.json({ error: 'Unable to update tag' }, { status: 400 }); } }
+export async function DELETE(req: Request) { try { await requireUser(); const id = new URL(req.url).searchParams.get('id'); if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 }); await db.tag.delete({ where: { id } }); return NextResponse.json({ ok: true }); } catch { return NextResponse.json({ error: 'Unable to delete tag' }, { status: 400 }); } }

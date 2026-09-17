@@ -1,35 +1,33 @@
 # NattaVault
 
-NattaVault is a production-oriented personal digital archive: a premium public showcase backed by authenticated private file management.
+NattaVault is a personal digital archive with a curated public portfolio and a protected asset manager.
 
-## Features
-- PostgreSQL/Prisma relational catalog for files, folders, tags, collections, share links, events, and audit logs.
-- Secure signed-session admin authentication, protected by middleware and server-side authorization.
-- S3-compatible private object storage abstraction with short-lived signed preview/download URLs.
-- Real multipart uploads with size limits, safe storage keys, MIME metadata, and audit logging.
-- Public archive, search, file detail pages, responsive gallery, collection-ready data model, and event tracking.
-- Security headers, no public storage URLs, private-by-default files, and no execution of uploaded content.
+## What is implemented
+- Next.js 14 App Router, TypeScript, Prisma/PostgreSQL, and S3-compatible private storage.
+- Public archive, server-side search, public collections, visibility-aware file pages, signed previews/downloads, sitemap and robots rules.
+- Protected admin dashboard, paginated file manager, metadata editor, upload flow, folder/tag/collection APIs and admin views, analytics, storage overview, activity logs, and cryptographically random share links.
+- Relational file organization with folders, tags, collections, events, audit records, and expiring shares.
 
-## Local development
-Requirements: Node.js 20+, PostgreSQL, and an S3-compatible bucket (AWS S3, Cloudflare R2, MinIO, etc.).
-
+## Local setup
 ```bash
 cp .env.example .env
 npm install
+npx prisma generate
 npx prisma db push
 npm run db:seed
 npm run dev
 ```
-Open http://localhost:3000. Seed credentials use `ADMIN_EMAIL` and `ADMIN_PASSWORD`; replace them before production.
 
-## Environment variables
-`DATABASE_URL`, `AUTH_SECRET`, `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, `PUBLIC_SITE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and optional `MAX_UPLOAD_BYTES`. Leave `STORAGE_ENDPOINT` empty for AWS; set it for R2/MinIO.
+Required services are PostgreSQL and a private S3-compatible bucket (AWS S3, Cloudflare R2, MinIO, or equivalent). Configure `DATABASE_URL`, `AUTH_SECRET`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, and optionally `STORAGE_ENDPOINT`; also set `PUBLIC_SITE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `MAX_UPLOAD_BYTES`.
 
-## Architecture
-Pages and route handlers call application services (`lib/auth`, `lib/storage`, `lib/security`) and Prisma. The storage provider implements upload/delete/existence/signed URLs independently from the database and UI, so another provider can replace it without changing pages. Original files never live in PostgreSQL or the public folder.
+## Security notes
+Files are private by default, object URLs are never stored in public pages, and preview/download routes authorize private access before issuing five-minute signed URLs. Uploads use generated storage keys and sanitized names, with configurable size limits. Keep the bucket private, use TLS, rotate credentials, and add malware scanning/image processing in production for untrusted uploads.
 
-## Production checklist
-Use a managed PostgreSQL database and private bucket, a long random `AUTH_SECRET`, TLS, restrictive bucket CORS, malware scanning and image/video processing workers appropriate to your threat model, and a reverse proxy rate limit for login/upload endpoints. Run `npm run build` and `npm start` for deployment.
+## Admin routes
+- `/admin` dashboard
+- `/admin/files` paginated manager and `/admin/files/[id]` metadata editor
+- `/admin/upload`, `/admin/folders`, `/admin/tags`, `/admin/collections`
+- `/admin/analytics`, `/admin/activity`, `/admin/storage`
 
-## Current limitations
-Uploads are buffered in the route handler and do not yet include resumable multipart transfer, background thumbnail generation, or a full metadata editor UI. The schema and storage boundary are ready for those workers; image previews use the protected signed endpoint and non-image files use type-aware fallback previews.
+## Limitations requiring infrastructure
+The upload endpoint buffers each request in the Next.js process. For very large assets, add a multipart direct-to-S3 flow using the same storage boundary. Thumbnail generation is intentionally graceful: browser-compatible previews use signed originals; production deployments should add an image/video/PDF worker (Sharp/FFmpeg/Poppler) and persist thumbnail keys.
