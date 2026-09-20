@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireUser } from '@/lib/auth';
 import { rateLimit, requireSameOrigin } from '@/lib/request-security';
+import { validateMagicBytes, validateUpload } from '@/lib/security';
+import { storage } from '@/lib/storage';
 import crypto from 'node:crypto';
 
 export async function POST(req: Request) {
