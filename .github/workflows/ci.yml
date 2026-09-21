@@ -1,0 +1,52 @@
+name: NattaVault CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/nattavault_ci
+      AUTH_SECRET: ci-only-build-secret-not-for-production
+      STORAGE_ENDPOINT: https://example.invalid
+      STORAGE_REGION: us-east-1
+      STORAGE_BUCKET: nattavault-ci
+      STORAGE_ACCESS_KEY: ci-access-key
+      STORAGE_SECRET_KEY: ci-secret-key
+      PUBLIC_SITE_URL: http://localhost:3000
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: ci-only-password
+      MAX_UPLOAD_BYTES: "524288000"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npm run db:generate
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
